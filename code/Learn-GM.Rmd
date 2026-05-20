@@ -114,7 +114,7 @@ census2020pl_vars <- read.csv(census_metadata_file)
 
 A quick visualization of the three spatial datasets shows that the districts are large and irregularly shaped, the precincts are smaller and more numerous, and the block groups are the smallest and most numerous.
 
-```{r plot data, fig.height=6, fig.width=12, dpi=300, echo=FALSE, warning=FALSE, message=FALSE}
+```{r plot data, fig.height=5, fig.width=12, dpi=300, echo=FALSE, warning=FALSE, message=FALSE}
 # district
 dst <- ggplot() +
   geom_sf(data = districts, fill = "#C1E3CD", col = "#006d2c", alpha = 0.5) +
@@ -134,7 +134,7 @@ bg <- ggplot() +
 grid.arrange(dst, prct, bg, nrow = 1)
 ```
 
-<span style="color: #6f7f6c; font-weight: bold;">Figure 1: Visualize Louisiana Precints, Block Groups, and Districts</span>
+<span style="color: #6f7f6c; font-weight: bold;">Figure 1: Visualize Louisiana Precincts, Block Groups, and Districts</span>
 
 
 # 3. Data Processing
@@ -168,15 +168,19 @@ minority_vars <- census2020pl_vars |>
 minority_vars |> 
   dplyr::select(name, label) |>
   rename(Variable = name, Label = label) |>
+  kable(format = "html") %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE) |>
-  scroll_box(height = "300px")  # adjust height as needed
+  scroll_box(height = "300px")
 ```
+
+<br>
 
 <span style="color: #6f7f6c; font-weight: bold;">Table 1: Extract Census Variables</span>
 
 Next, we will select the relevant variables from the block groups dataset and rename them for clarity. We will also calculate the area of each block group for later use in area-weighted reaggregation.
 
 For reference: 
+
 - `Black` is a sum of all 32 columns shown above, in which any of the racial categories by which someone identifies is Black or African American.  
 - `Total` is a copy of the population 18 years or over, variable `P3_001N`.  
 - `pctMinority` is calculated as `Black / Total * 100`  
@@ -205,7 +209,7 @@ precincts <- precincts |>
 ```
 
 
-```{r map var, message=FALSE, warning=FALSE, fig.height=8, fig.width=12, dpi=300, echo=FALSE}
+```{r map var, message=FALSE, warning=FALSE, fig.height=6, fig.width=12, dpi=300, echo=FALSE}
 
 bg_M <- ggplot() +
   geom_sf(data = blockgroups_calc, aes(fill = pctMinority), col = "grey90", lwd = 0.1) +
@@ -238,7 +242,7 @@ grid.arrange(bg_M, v_M, nrow = 1)
 
 We will estimate the minority population percentage and minority party vote percentages in each district by performing an area-weighted reaggregation (AWR) of the block group data and precints data. This involves intersecting the block groups with the districts, calculating the area of the intersection, and then weighting the population counts by the proportion of the block group that falls within each district. We will do this for the total population and the minority population to calculate the percentage of minority population in each district.
 
-For more details on the AWR method, see Chapter 4 of this [Simple Feature Workbook](https://opengisci.github.io/Learn-Simple-Features/area-weighted-re-aggregation.html)
+For more details on the AWR method, see Chapter 4 of this **[Simple Feature Workbook](https://opengisci.github.io/Learn-Simple-Features/area-weighted-re-aggregation.html)**
 
 ```{r bg awr, message=FALSE, warning=FALSE}
 district_estimates <- st_intersection(blockgroups_calc, districts) |> 
@@ -338,10 +342,12 @@ d_ch_est <- blockgroups_calc |>
 ```{r print convex hull table, warning=FALSE, message=FALSE, echo=FALSE}
 d_ch_est |>
   dplyr::select(DISTRICT, chTotal, chMinority) |>
+  mutate(pctMinoritych = round(chMinority / chTotal * 100, 1)) |>
   rename(
     "District" = DISTRICT,
     "Total Pop in Convex Hull" = chTotal,
-    "Minority Pop in Convex Hull" = chMinority
+    "Minority Pop in Convex Hull" = chMinority,
+    "Pct Minority in Convex Hull" = pctMinoritych
   ) |>
   kable() |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
@@ -371,10 +377,12 @@ d_ch_estV <- precincts |>
 ```{r print convex hull voting table, warning=FALSE, message=FALSE, echo=FALSE}
 d_ch_estV |>
   dplyr::select(DISTRICT, chtotV, chmpV) |>
+  mutate(pctMPch = round(chmpV / chtotV * 100, 1)) |>
   rename(
     "District" = DISTRICT,
     "Total Voters in Convex Hull" = chtotV,
-    "Minority Party Votes in Convex Hull" = chmpV
+    "Minority Party Votes in Convex Hull" = chmpV,
+    "Pct Minority Party Votes in Convex Hull" = pctMPch
   ) |>
   kable() |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
@@ -424,10 +432,12 @@ d_mbc_est <- blockgroups_calc |>
 ```{r print mbc table, warning=FALSE, message=FALSE, echo=FALSE}
 d_mbc_est |>
   dplyr::select(DISTRICT, mbcTotal, mbcMinority) |>
+  mutate(pctMinoritymbc = round(mbcMinority / mbcTotal * 100, 1)) |>
   rename(
     "District" = DISTRICT,
     "Total Pop in MBC" = mbcTotal,
-    "Minority Pop in MBC" = mbcMinority
+    "Minority Pop in MBC" = mbcMinority,
+    "Pct Minority in MBC" = pctMinoritymbc
   ) |>
   kable() |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
@@ -455,10 +465,12 @@ d_mbc_estV <- precincts |>
 ```{r print mbc voting table, warning=FALSE, message=FALSE, echo=FALSE}
 d_mbc_estV |>
   dplyr::select(DISTRICT, mbctotV, mbcmpV) |>
+  mutate(pctMPmbc = round(mbcmpV / mbctotV * 100, 1)) |>
   rename(
     "District" = DISTRICT,
     "Total Voters in MBC" = mbctotV,
-    "Minority Party Votes in MBC" = mbcmpV
+    "Minority Party Votes in MBC" = mbcmpV,
+    "Pct Minority Party Votes in MBC" = pctMPmbc
   ) |>
   kable() |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
@@ -467,7 +479,7 @@ d_mbc_estV |>
 
 <span style="color: #6f7f6c; font-weight: bold;">Table 6: Voting Variables in Minimum Bounding Circle</span>
 
-## 4.4 Compactness and Composition Comparison
+## 4.4 Compactness and Composition
 
 With everything calculated, we can now compare the demographic and voting composition of the actual districts to their convex hulls and minimum bounding circles and assess the compactness of the district shapes.
 
@@ -552,6 +564,7 @@ districts_results |> st_drop_geometry() |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
 ```
 
+<span style="color: #6f7f6c; font-weight: bold;">Table 7: Compactness and Composition Comparison</span>
 
 A third approach is the **parsimonious combined approach**. It asks whether the district's shape changes representation. The analysis compares the composition of the actual district to the composition of a compact geometric version of the same district, 
 
@@ -584,10 +597,14 @@ $$
 
 # 5. Comparison
 
-Interpret the visualizations: 
+Below are some helpful visualizations to help make sense of the different approaches used to measure compactness and representation.
+
+The first figure compares three compactness metrics across districts. The first thing to notice is that the measures disagree substantially for some districts. Some further questions for consideration:
 
 - Which districts are consistently non-compact across all three measures?
+
 - Which districts change dramatically depending on the compactness metric?
+
 - Which measure appears most sensitive to elongated districts?
 
 ```{r compactness comparison plot, warning=FALSE, message=FALSE, fig.height=6, fig.width=12, dpi=300, echo=FALSE}
@@ -601,8 +618,7 @@ districts_results |>
       compact_shp  = "Polsby-Popper",
       compact_hull = "Convex Hull Ratio",
       compact_circ = "Reock (Circle Ratio)"),
-    DISTRICT = factor(DISTRICT) |> fct_reorder(score)
-  ) |>
+    DISTRICT = factor(DISTRICT, levels = as.character(1:6))) |>
   ggplot(aes(x = DISTRICT, y = score, fill = measure)) +
   geom_col(position = "dodge") +
   scale_fill_manual(values = c("#6EA6C3", "#99CFAB", "#DC6D85")) +
@@ -617,10 +633,19 @@ districts_results |>
 
 ```
 
+<span style="color: #6f7f6c; font-weight: bold;">Figure 5: Compactness Score Comparison</span>
+
+The second figure compares the demographic and voting composition of the actual districts to their convex hulls and minimum bounding circles. The questions for consideration here are:
+
 - Which districts show the largest gap between actual composition and compact-shape composition?
+ 
 - Which districts appear potentially packed?
+
 - Which districts appear potentially cracked or diluted?
+
 - Which districts remain similar across all geometries?
+
+> Note that the key interpretation is based on the distance between the blue point and the compact-shape estimates.
 
 ```{r demographic plots, fig.height=12, fig.width=12, dpi=300, warning=FALSE, message=FALSE, echo=FALSE}
 # combine both into one long dataframe
@@ -647,7 +672,7 @@ ggplot(combined, aes(y = type)) +
   geom_point(aes(x = actual),color ="#6EA6C3", size = 4) +
   facet_wrap(~ DISTRICT, ncol = 1, labeller = label_both) +
   labs(
-    title = "Demographic Estimates by District and Geometry Type",
+    title = "Demographic and Voting Estimates by District and Geometry Type",
     subtitle = "Blue = actual district  |  Green = convex hull  |  Pink = min. bounding circle",
     x = "Percentage (%)", y = NULL) +
   theme3 +
@@ -657,13 +682,22 @@ ggplot(combined, aes(y = type)) +
   )
 ```
 
+<span style="color: #6f7f6c; font-weight: bold;">Figure 6: Comparing Demographic and Voting Estimates</span>
+
+The last figure examines the statistical relationship between compactness, minority composition, and representational differences. The strongest pattern is the large negative correlations between: minority composition and compactness measures. This means that higher minority population percentages are associated with lower compactness scores and higher minority party vote shares are also associated with lower compactness. 
+
+> Note: This pattern is consistent with the idea of packing, where districts with higher minority populations are drawn in more irregular shapes to concentrate those voters into fewer districts. 
+
+Please consider: 
+
 - Which compactness measure appears most strongly related to demographic change?
 
 - Are compactness and representation strongly correlated?
 
 - Do racial and partisan composition behave similarly?
 
-```{r correlation matrix, warning=FALSE, message=FALSE, echo=FALSE, fig.height=10, fig.width=12, dpi=300}
+
+```{r correlation matrix, warning=FALSE, message=FALSE, echo=FALSE, fig.height=6, fig.width=12, dpi=300}
 districts_results_cor <- districts_results |>
   st_drop_geometry() |>
   select(
@@ -710,3 +744,6 @@ votecor <- ggcorrplot(
 
 grid.arrange(popcor, votecor, nrow = 1)
 ```
+
+
+<span style="color: #6f7f6c; font-weight: bold;">Figure 7: Correlation Analysis</span>
