@@ -1,0 +1,611 @@
+---
+title: "Analyzing Gerrymandering in Louisiana"
+author: "Joseph Holler, Peter Kedron, Emily Zhou"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    css: styles.css
+    code_folding: hide
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+urlcolor: blue  
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<div class="date">
+  Version 1.0 | First Created May 18, 2026 | Updated May 20, 2026
+</div>
+
+```{r sets up, warning = FALSE, message = FALSE, include=FALSE}
+# global options 
+options(scipen=999)
+options(tigris_class = "sf")
+options(digits = 3)
+
+# list of required packages
+packages <- c("tidyverse",
+              "dplyr",
+              "here",
+              "ggplot2",
+              "lwgeom",
+              "tidycensus",
+              "knitr", 
+              "htmltools",
+              "kableExtra",
+              "markdown",
+              "ggcorrplot",
+              "gridExtra",
+              "sf")
+
+# install and load required packages
+package.check <- lapply(
+  packages,
+  FUN = function(x) {
+    if (!require(x, character.only = TRUE)) {
+      install.packages(x, dependencies = TRUE, quietly=TRUE)
+      library(x, character.only = TRUE)
+    }
+  }
+)
+
+theme1 <- theme(plot.subtitle = element_text(size = 12,face = "italic"),
+                legend.position = "none",
+                plot.title = element_text(size = 14, face = "bold"), 
+                axis.text.x=element_text(size=8),
+                axis.text.y=element_text(size=8), 
+                axis.title=element_blank(), 
+                panel.background = element_blank(),
+                panel.border = element_rect(colour = "grey", fill=NA, linewidth =0.8))
+palette1 <- c("#6EA6C3", "#99CFAB", "#FEE59C","#DC6D85", "#FFD190", "#F1B6AC", "#F7B9C8", "#C1DDF4","#C1E3CD", "#ECDCA8" ) 
+green_palette <- c("#f7fcf5",  "#C1E3CD",  "#99CFAB",  "#41ab5d",  "#006d2c")
+
+theme2 <- theme(
+    plot.subtitle  = element_text(size = 9, face = "italic"),
+    plot.title     = element_text(size = 12, face = "bold"),
+    axis.text.x    = element_text(size = 9),
+    axis.text.y    = element_text(size = 9),
+    axis.title     = element_text(size = 9))
+  
+theme3 <- theme_bw() +
+  theme(plot.subtitle = element_text(size = 12, face = "italic"),
+        plot.title = element_text(size = 14, face = "bold"),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill = NA, linewidth = 0.8))
+
+```
+
+# 1. Introduction
+
+
+
+# 2. Data and Variables
+
+```{r load data, warning = FALSE, message=FALSE, results='hide'}
+
+# file paths
+districts_file <- here("data", "raw", "public", "Act_2_1st_ES_(2024)_-_Congress.shp")
+blockgroup_file <- here("data", "raw", "public", "LA_block_groups.gpkg")
+precincts_file <- here("data", "derived", "public", "LA_precincts.gpkg")
+census_metadata_file <- here::here("data", "metadata", "census2020pl_vars.csv")
+
+# read in the data
+districts <- st_read(districts_file)
+precincts <- st_read(precincts_file, layer = "LA_precincts_clipped")
+blockgroups <- st_read(blockgroup_file)
+census2020pl_vars <- read.csv(census_metadata_file)
+
+```
+
+
+```{r plot data, fig.height=6, fig.width=12, dpi=300, echo=FALSE, warning=FALSE, message=FALSE}
+# district
+dst <- ggplot() +
+  geom_sf(data = districts, fill = "#C1E3CD", col = "#006d2c", alpha = 0.5) +
+  theme1 +
+  labs(title = "2021 Louisiana Congressional Districts")
+# precincts
+prct <- ggplot() +
+  geom_sf(data = precincts, fill =  "#C1DDF4", col = "#6EA6C3", alpha = 0.5) +
+  theme1 +
+  labs(title = "2020 Louisiana Precincts")
+# block groups
+bg <- ggplot() +
+  geom_sf(data = blockgroups, fill = "#F1B6AC", col = "#DC6D85", alpha = 0.5) +
+  theme1 +
+  labs(title = "2020 Louisiana Block Groups")
+
+grid.arrange(dst, prct, bg, nrow = 1)
+```
+
+
+# 3. Data Processing
+
+## 3.1 Spatial Transformations
+
+```{r reproject data, warning=FALSE, message=FALSE}
+districts <- districts |> st_transform(4269) 
+st_geometry(districts) <- "geom"
+
+blockgroups <- blockgroups |> st_transform(4269)
+st_geometry(blockgroups) <- "geom"
+
+precincts <- precincts |> st_make_valid() |> st_transform(4269) |> 
+st_geometry(precincts) <- "geom"
+
+```
+
+Census data needs to be transformed from the WGS 1984 geographic coordinate system to the NAD 1983 geographic coordinate system.
+
+
+## 3.2 Compute  Variable of Interest
+
+Find the total of people identifying as Black or African American as one race or any combination of multiple races.
+First, make a list of all the variables inclusive of people identifying as Black or African American.
+
+```{r find variables, warning=FALSE, message=FALSE}
+minority_cat <- "Black"
+minority_vars <- census2020pl_vars |> 
+  dplyr::filter(str_detect(name, "P3"),
+                str_detect(label, minority_cat)) |> 
+  select(-concept)
+minority_vars |> 
+  kable(format = "html") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
+```
+
+Next, calculate new columns.
+`Black` is a sum of all 32 columns shown above, in which any of the racial categories by which someone identifies is Black or African American.  
+`Total` is a copy of the population 18 years or over, variable `P3_001N`.  
+`pctMinority` is calculated as `Black / Total * 100`  
+`CheckPct` is calculated as the percentage of the population 18 years or older that is either white of one race only (`P3_003N`) *or* Black or African American as calculated above. 
+
+```{r calculate variables, warning=FALSE, message=FALSE}
+blockgroups_calc <- blockgroups |> 
+  rowwise() |> 
+  mutate(minority = sum(c_across(all_of(minority_vars$name)))) |> 
+  ungroup() |> 
+  mutate(sarea = st_area(geom),
+         Total = P3_001N,
+         pctMinority = minority / Total * 100,
+         CheckPct = (minority + P3_003N) / Total * 100) |> 
+  select(GEOID, sarea, minority, Total, pctMinority, CheckPct)
+```
+
+```{r calculate variables for precincts, warning=FALSE, message=FALSE}
+precincts <- precincts |> 
+  mutate(
+  totV = G24PRERTRU + G24PREDHAR,
+  mpV = G24PREDHAR) |>
+  mutate(sarea = st_area(geom))
+```
+
+Map the percentage of the population 18 or over that is a minority.
+
+```{r map, message=FALSE, warning=FALSE, fig.height=8, fig.width=12, dpi=300, echo=FALSE}
+
+bg_M <- ggplot() +
+  geom_sf(data = blockgroups_calc, aes(fill = pctMinority), col = "grey90", lwd = 0.1) +
+  scale_fill_gradient(low = "#f7fcf5", high = "#006d2c", name = "Pct Minority") +
+  theme1 +
+  labs(title = "Minority Population (18+) By Block Group", fill = "Percentage") + 
+  theme(
+    legend.position = "bottom",
+    axis.title = element_text(size = 9))
+
+v_M <- ggplot() +
+  geom_sf(data = precincts, aes(fill = mpV / totV * 100), col = "grey90", lwd = 0.1) +
+  #blue palette
+  scale_fill_gradient(low = "#F0FFFF", high = "#6EA6C3", name = "Pct Minority Voters") +
+  theme1 +
+  labs(title = "Minority Party Vote By Precinct", ll = "Percentage") + 
+  theme(
+    legend.position = "bottom",
+    axis.title = element_text(size = 9))
+
+grid.arrange(bg_M, v_M, nrow = 1)
+```
+
+
+# 4. Analysis
+
+## 4.1 Area Weighted Reaggregation
+
+Estimate the white and black voting age populations using AWR with block groups.
+Why do this when POPULATION, BLACK, and WHITE variables are already in the table?
+First, this is the total population, but we should care more about the voting age population.
+Second, we may want to categorize and calculate `BLACK` differently from the state of Alabama.
+
+```{r bg awr, message=FALSE, warning=FALSE}
+
+district_estimates <- st_intersection(blockgroups_calc, districts) |> 
+  st_make_valid() |> 
+  mutate(
+    awTot = Total * as.numeric(st_area(geom) / sarea),
+    awMinor = minority * as.numeric(st_area(geom) / sarea)
+  ) |> 
+  st_drop_geometry() |> 
+  group_by(DISTRICT) |> 
+  summarize(bgTotal = sum(awTot),
+            bgMinority = sum(awMinor))
+
+districts_join <- districts |> 
+  left_join(district_estimates, by = "DISTRICT") |> 
+  mutate(pctMinoritybg = round(bgMinority / bgTotal * 100, 1))
+```
+
+```{r voting awr, warning=FALSE, message=FALSE}
+district_estimates <- st_intersection(precincts, districts) |> 
+  st_make_valid() |> 
+  mutate(
+    awTot = totV * as.numeric(st_area(geom) / sarea),
+    awMinor = mpV * as.numeric(st_area(geom) / sarea)
+  ) |> 
+  st_drop_geometry() |> 
+  group_by(DISTRICT) |> 
+  summarize(totV = sum(awTot),
+            mpV = sum(awMinor))
+
+districts_join <- districts_join |> 
+  left_join(district_estimates, by = "DISTRICT") |> 
+  mutate(pctMP = round(mpV / totV * 100, 1))
+```
+
+
+```{r print district table, warning=FALSE, message=FALSE, echo=FALSE}
+districts_join |> st_drop_geometry() |> 
+  dplyr::select(DISTRICT, bgTotal, bgMinority, pctMinoritybg, totV, mpV, pctMP) |>
+  rename(
+    "District" = DISTRICT,
+    "Total Pop" = bgTotal,
+    "Minority Pop" = bgMinority,
+    "Pct Minority" = pctMinoritybg,
+    "Total Voters" = totV,
+    "Minority Party Votes" = mpV,
+    "Pct Minority Party Votes" = pctMP
+  ) |>
+  kable() |> 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
+```
+
+## 4.2 Convex Hulls
+
+```{r make convex hulls, warning=FALSE, message=FALSE, dpi=300, fig.height=8, fig.width=12}
+d_ch <- districts |> 
+  st_convex_hull() |> 
+  mutate(chArea = st_area(geom)) # compute the area of the convex hull
+
+ggplot() +
+  geom_sf(data = districts, fill = "#C1E3CD", col = "#006d2c", alpha = 0.8, linewidth = 0.2) +
+  geom_sf(data = d_ch, fill = "#F0FFFF", col = "#6EA6C3", alpha = 0.5, linewidth = 0.6) +
+  theme1 +
+  labs(title = "Districts and Their Convex Hulls")
+```
+
+```{r convex hull pop estimates, warning=FALSE, message=FALSE}
+# estimate the population in the convex hulls using AWR with block groups
+d_ch_est <- blockgroups_calc |> 
+  st_intersection(d_ch) |> 
+  st_make_valid() |> 
+  mutate(
+    fArea = st_area(geom),
+    awTot = Total * as.numeric(fArea / sarea),
+    awMinor = minority * as.numeric(fArea / sarea),
+  ) |> 
+  st_drop_geometry() |> 
+  group_by(DISTRICT, chArea) |> 
+  summarize(chTotal = sum(awTot),
+            chMinority = sum(awMinor))
+```
+
+
+```{r print convex hull table, warning=FALSE, message=FALSE, echo=FALSE}
+d_ch_est |>
+  dplyr::select(DISTRICT, chTotal, chMinority) |>
+  rename(
+    "District" = DISTRICT,
+    "Total Pop in Convex Hull" = chTotal,
+    "Minority Pop in Convex Hull" = chMinority
+  ) |>
+  kable() |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
+```
+
+
+```{r convex hull voting estimates, warning=FALSE, message=FALSE}
+# voting population estimates in the convex hulls using AWR with precincts
+d_ch_estV <- precincts |> 
+  st_intersection(d_ch) |> 
+  st_make_valid() |> 
+  mutate(
+    fArea = st_area(geom),
+    awTot = totV * as.numeric(fArea / sarea),
+    awMinor = mpV * as.numeric(fArea / sarea),
+  ) |> 
+  st_drop_geometry() |> 
+  group_by(DISTRICT) |> 
+  summarize(chtotV = sum(awTot),
+            chmpV = sum(awMinor))
+```
+
+
+```{r print convex hull voting table, warning=FALSE, message=FALSE, echo=FALSE}
+d_ch_estV |>
+  dplyr::select(DISTRICT, chtotV, chmpV) |>
+  rename(
+    "District" = DISTRICT,
+    "Total Voters in Convex Hull" = chtotV,
+    "Minority Party Votes in Convex Hull" = chmpV
+  ) |>
+  kable() |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
+```
+
+## 4.3 Minimum Bounding Circle
+
+```{r make mbc, warning=FALSE, message=FALSE, dpi=300, fig.height=8, fig.width=12}
+d_mbc <- districts |> 
+  lwgeom::st_minimum_bounding_circle() |> 
+  mutate(mbcArea = st_area(geom))
+
+ggplot() +
+  geom_sf(data = districts, fill = "#C1E3CD", col = "#006d2c", alpha = 0.8, linewidth = 0.2) +
+  geom_sf(data = d_mbc, fill = "#F0FFFF", col = "#6EA6C3", alpha = 0.5, linewidth = 0.6) +
+  theme1 +
+  labs(title = "Districts and Their Minimum Bounding Circles")
+```
+
+```{r mbc pop estimates, warning=FALSE, message=FALSE}
+d_mbc_est <- blockgroups_calc |> 
+  st_intersection(d_mbc) |> 
+  st_make_valid() |> 
+  mutate(
+    fArea = st_area(geom),
+    awTot = Total * as.numeric(fArea / sarea),
+    awMinority = minority * as.numeric(fArea / sarea),
+  ) |> 
+  st_drop_geometry() |> 
+  group_by(DISTRICT, mbcArea) |> 
+  summarize(mbcTotal = sum(awTot),
+            mbcMinority = sum(awMinority))
+```
+
+
+```{r print mbc table, warning=FALSE, message=FALSE, echo=FALSE}
+d_mbc_est |>
+  dplyr::select(DISTRICT, mbcTotal, mbcMinority) |>
+  rename(
+    "District" = DISTRICT,
+    "Total Pop in MBC" = mbcTotal,
+    "Minority Pop in MBC" = mbcMinority
+  ) |>
+  kable() |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
+```
+
+```{r mbc voting estimates, warning=FALSE, message=FALSE}
+d_mbc_estV <- precincts |> 
+  st_intersection(d_mbc) |> 
+  st_make_valid() |> 
+  mutate(
+    fArea = st_area(geom),
+    awTot = totV * as.numeric(fArea / sarea),
+    awMinor = mpV * as.numeric(fArea / sarea),
+  ) |> 
+  st_drop_geometry() |> 
+  group_by(DISTRICT) |> 
+  summarize(mbctotV = sum(awTot),
+            mbcmpV = sum(awMinor))
+```
+
+
+```{r print mbc voting table, warning=FALSE, message=FALSE, echo=FALSE}
+d_mbc_estV |>
+  dplyr::select(DISTRICT, mbctotV, mbcmpV) |>
+  rename(
+    "District" = DISTRICT,
+    "Total Voters in MBC" = mbctotV,
+    "Minority Party Votes in MBC" = mbcmpV
+  ) |>
+  kable() |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
+```
+
+## 4.4 Compactness and Composition Comparison
+
+Join convex hull estimates to Districts with block group estimates.
+
+Calculate compactness scores based on:
+
+- the area and perimeter
+- the area and the area of the convex hull
+- the area and the area of the minimum bounding circle
+
+“How different would the demographic and voting composition be if districts were represented by alternative geometries (convex hulls or minimum bounding circles), and how compact are those district shapes?”
+
+Traditional shape compactness measures
+
+```{r join results, warning=FALSE, message=FALSE}
+districts_results <- districts_join |> 
+  left_join(d_ch_est, by = "DISTRICT") |> 
+  mutate(chPct = round(chMinority / chTotal * 100, 1),
+         chDiff = pctMinoritybg - chPct,
+         chAbsDiff = abs(chDiff)) |> 
+  left_join(d_mbc_est, by = "DISTRICT") |> 
+  mutate(mbcPct = round(mbcMinority / mbcTotal * 100, 1),
+         mbcDiff = pctMinoritybg - mbcPct,
+         mbcAbsDiff = abs(mbcDiff))  |> 
+  left_join(d_ch_estV, by = "DISTRICT") |> 
+  mutate(chPctV = round(chmpV / chtotV * 100, 1),
+         chDiffV = pctMP - chPctV,
+         chAbsDiffV = abs(chDiffV)) |> 
+  left_join(d_mbc_estV, by = "DISTRICT") |> 
+  mutate(mbcPctV = round(mbcmpV / mbctotV * 100, 1),
+         mbcDiffV = pctMP - mbcPctV,
+         mbcAbsDiffV = abs(mbcDiffV)) |> 
+  # calculate compactness scores
+  mutate(
+    darea = st_area(geom),
+    dperim = st_length(st_cast(geom, "MULTILINESTRING")),
+    compact_shp = round( as.numeric((4 * pi * darea) / dperim^2), 2),
+    compact_hull = round( as.numeric(darea / chArea), 2),
+    compact_circ = round( as.numeric(darea / mbcArea), 2)
+  )
+```
+
+
+```{r print comparison table, warning=FALSE, message=FALSE, echo=FALSE}
+districts_results |> st_drop_geometry() |> 
+  dplyr::select(DISTRICT, pctMinoritybg, chPct, chDiff, chAbsDiff, mbcPct, mbcDiff, mbcAbsDiff) |>
+  rename(
+    "District" = DISTRICT,
+    "Pct Minority in District" = pctMinoritybg,
+    "Pct Minority in Convex Hull" = chPct,
+    "Difference (District - Convex Hull)" = chDiff,
+    "Absolute Difference (District - Convex Hull)" = chAbsDiff,
+    "Pct Minority in MBC" = mbcPct,
+    "Difference (District - MBC)" = mbcDiff,
+    "Absolute Difference (District - MBC)" = mbcAbsDiff
+  ) |>
+  kable() |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
+```
+
+# 5. Comparison
+
+```{r correlation matrix, warning=FALSE, message=FALSE, fig.height=10, fig.width=12, dpi=300}
+districts_results_cor <- districts_results |>
+  st_drop_geometry() |>
+  select(
+    pctMinoritybg,
+    chAbsDiff,
+    mbcAbsDiff,
+    compact_shp,
+    compact_hull,
+    compact_circ)
+
+popcor <- ggcorrplot(
+  round(cor(districts_results_cor), 1),
+  colors = c("#6EA6C3", "#F7F0F5", "#DC6D85"),  
+  type = "lower",
+  insig = "blank",
+  lab = TRUE,       
+  lab_size = 3,     
+  tl.cex = 8) +
+  labs(
+    title = "District Shape and Minority Population Composition") +
+  theme2
+
+
+districts_results_cor2 <- districts_results |> 
+  st_drop_geometry() |> 
+  select(pctMP,
+         chAbsDiffV,
+         mbcAbsDiffV,
+         compact_shp,
+         compact_hull,
+         compact_circ)
+
+votecor <- ggcorrplot(
+  round(cor(districts_results_cor2), 1),
+  colors = c("#6EA6C3", "#F7F0F5", "#DC6D85"),  
+  type = "lower",
+  insig = "blank",
+  lab = TRUE,       
+  lab_size = 3,      
+  tl.cex = 8) +
+  labs(
+    title = "District Shape and Minority Voting Composition") +
+  theme2
+
+grid.arrange(popcor, votecor, nrow = 1)
+```
+
+
+This means:
+
+actual district minority percentage minus compact-shape minority percentage.
+
+So:
+
+positive value = the actual district contains more minority population than its compact comparison shape
+possible packing
+negative value = the actual district contains less minority population than its compact comparison shape
+possible cracking/dilution
+near zero = the weird shape may not meaningfully affect composition                              
+
+
+```{r compactness comparison plot, warning=FALSE, message=FALSE, fig.height=6, fig.width=12, dpi=300}
+districts_results |>
+  st_drop_geometry() |>
+  select(DISTRICT, compact_shp, compact_hull, compact_circ) |>
+  pivot_longer(cols = c(compact_shp, compact_hull, compact_circ),
+               names_to = "measure", values_to = "score") |>
+  mutate(
+    measure = recode(measure,
+      compact_shp  = "Polsby-Popper",
+      compact_hull = "Convex Hull Ratio",
+      compact_circ = "Reock (Circle Ratio)"),
+    DISTRICT = factor(DISTRICT) |> fct_reorder(score)
+  ) |>
+  ggplot(aes(x = DISTRICT, y = score, fill = measure)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c("#6EA6C3", "#99CFAB", "#DC6D85")) +
+  labs(
+    title = "Compactness Scores by District and Measure",
+    subtitle = "Higher scores indicate more compact districts",
+    x = "District", y = "Compactness Score", fill = "Measure"  ) +
+  theme1 +
+  theme(
+    legend.position = "bottom",
+    axis.title = element_text(size = 9))
+
+```
+
+
+```{r fig.height=12, fig.width=12, dpi=300}
+# combine both into one long dataframe
+combined <- bind_rows(
+  districts_results |>
+    st_drop_geometry() |>
+    select(DISTRICT, actual = pctMinoritybg, ch = chPct, mbc = mbcPct) |>
+    mutate(type = "Minority Population (%)"),
+  districts_results |>
+    st_drop_geometry() |>
+    select(DISTRICT, actual = pctMP, ch = chPctV, mbc = mbcPctV) |>
+    mutate(type = "Minority Party Vote (%)")
+) |>
+  mutate(
+    DISTRICT = factor(DISTRICT),
+    type = factor(type, levels = c("Minority Population (%)", "Minority Party Vote (%)"))
+  )
+
+ggplot(combined, aes(y = type)) +
+  geom_segment(aes(x = ch, xend = mbc, yend = type),
+               color = "darkgrey", linewidth = 1.5) +
+  geom_point(aes(x = ch), color = "#99CFAB", size = 4) +
+  geom_point(aes(x = mbc), color = "#DC6D85", size = 4) +
+  geom_point(aes(x = actual),color ="#6EA6C3", size = 4) +
+  facet_wrap(~ DISTRICT, ncol = 1, labeller = label_both) +
+  labs(
+    title = "Demographic Estimates by District and Geometry Type",
+    subtitle = "Blue = actual district  |  Green = convex hull  |  Pink = min. bounding circle",
+    x = "Percentage (%)", y = NULL) +
+  theme3 +
+  theme(
+    strip.text       = element_text(face = "bold", size = 10),
+    panel.spacing    = unit(1, "lines")
+  )
+```
+
