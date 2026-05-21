@@ -22,7 +22,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 <div class="date">
-  Version 1.0 | First Created May 18, 2026 | Updated May 20, 2026
+  Version 1.0 | First Created May 18, 2026 | Updated May 21, 2026
 </div>
 
 ```{r sets up, warning = FALSE, message = FALSE, include=FALSE}
@@ -165,6 +165,11 @@ minority_vars <- census2020pl_vars |>
   dplyr::filter(str_detect(name, "P3"),
                 str_detect(label, minority_cat)) |> 
   select(-concept)
+```
+
+<span style="color: #6f7f6c; font-weight: bold;">Table 1: Extract Census Variables</span>
+
+```{r print variables, warning=FALSE, message=FALSE, echo=FALSE}
 minority_vars |> 
   dplyr::select(name, label) |>
   rename(Variable = name, Label = label) |>
@@ -175,9 +180,7 @@ minority_vars |>
 
 <br>
 
-<span style="color: #6f7f6c; font-weight: bold;">Table 1: Extract Census Variables</span>
-
-Next, we will select the relevant variables from the __block groups__ dataset and rename them for clarity. We will also calculate the area of each block group for later use in area-weighted reaggregation.
+Next, we will select the relevant variables from the **block groups** dataset and rename them for clarity. We will also calculate the area of each block group for later use in area-weighted reaggregation.
 
 For reference: 
 
@@ -198,7 +201,7 @@ blockgroups_calc <- blockgroups |>
   select(GEOID, sarea, minority, Total, pctMinority, CheckPct)
 ```
 
-Similarly, for the __precincts__, we will calculate the total votes and the minority party votes based on the variables `G24PRERTRU` (total votes for the Republican candidate) and `G24PREDHAR` (total votes for the Democratic candidate). We will also calculate the area of each precinct for later use in area-weighted reaggregation.
+Similarly, for the **precincts**, we will calculate the total votes and the minority party votes based on the variables `G24PRERTRU` (total votes for the Republican candidate) and `G24PREDHAR` (total votes for the Democratic candidate). We will also calculate the area of each precinct for later use in area-weighted reaggregation.
 
 ```{r calculate variables for precincts, warning=FALSE, message=FALSE}
 precincts <- precincts |> 
@@ -240,7 +243,7 @@ grid.arrange(bg_M, v_M, nrow = 1)
 
 ## 4.1 Area Weighted Reaggregation
 
-We will estimate the minority population percentage and minority party vote percentages in each __district__ by performing an area-weighted reaggregation (AWR) of the block group data and precincts data. This involves intersecting the block groups with the districts, calculating the area of the intersection, and then weighting the population counts by the proportion of the block group that falls within each district. We will do this for the total population and the minority population to calculate the percentage of minority population in each district.
+We will estimate the minority population percentage and minority party vote percentages in each **district** by performing an area-weighted reaggregation (AWR) of the block group data and precincts data. This involves intersecting the block groups with the districts, calculating the area of the intersection, and then weighting the population counts by the proportion of the block group that falls within each district. We will do this for the total population and the minority population to calculate the percentage of minority population in each district.
 
 For more details on the AWR method, see Chapter 4 of this **[Simple Feature Workbook](https://opengisci.github.io/Learn-Simple-Features/area-weighted-re-aggregation.html)**
 
@@ -281,6 +284,9 @@ districts_join <- districts_join |>
 ```
 
 
+<span style="color: #6f7f6c; font-weight: bold;">Table 2: District Table with Demographic Variables Included</span>
+
+
 ```{r print district table, warning=FALSE, message=FALSE, echo=FALSE}
 districts_join |> st_drop_geometry() |> 
   dplyr::select(DISTRICT, bgTotal, bgMinority, pctMinoritybg, totV, mpV, pctMP) |>
@@ -297,7 +303,6 @@ districts_join |> st_drop_geometry() |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
 ```
 
-<span style="color: #6f7f6c; font-weight: bold;">Table 2: District Table with Demographic Variables Included</span>
 
 ## 4.2 Convex Hulls
 
@@ -338,6 +343,7 @@ d_ch_est <- blockgroups_calc |>
             chMinority = sum(awMinor))
 ```
 
+<span style="color: #6f7f6c; font-weight: bold;">Table 3: Demographic Variables in Convex Hull</span>
 
 ```{r print convex hull table, warning=FALSE, message=FALSE, echo=FALSE}
 d_ch_est |>
@@ -352,8 +358,6 @@ d_ch_est |>
   kable() |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
 ```
-
-<span style="color: #6f7f6c; font-weight: bold;">Table 3: Demographic Variables in Convex Hull</span>
 
 The same process is repeated for the precincts to estimate the total voters and minority party votes in the convex hulls, which will allow us to calculate the percentage of minority party votes in each convex hull.
 
@@ -373,6 +377,7 @@ d_ch_estV <- precincts |>
             chmpV = sum(awMinor))
 ```
 
+<span style="color: #6f7f6c; font-weight: bold;">Table 4: Voting Variables in Convex Hull</span>
 
 ```{r print convex hull voting table, warning=FALSE, message=FALSE, echo=FALSE}
 d_ch_estV |>
@@ -388,7 +393,6 @@ d_ch_estV |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
 ```
 
-<span style="color: #6f7f6c; font-weight: bold;">Table 4: Voting Variables in Convex Hull</span>
 
 ## 4.3 Minimum Bounding Circle
 
@@ -428,6 +432,7 @@ d_mbc_est <- blockgroups_calc |>
             mbcMinority = sum(awMinority))
 ```
 
+<span style="color: #6f7f6c; font-weight: bold;">Table 5: Demographic Variables in Minimum Bounding Circle</span>
 
 ```{r print mbc table, warning=FALSE, message=FALSE, echo=FALSE}
 d_mbc_est |>
@@ -442,7 +447,6 @@ d_mbc_est |>
   kable() |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
 ```
-<span style="color: #6f7f6c; font-weight: bold;">Table 5: Demographic Variables in Minimum Bounding Circle</span>
 
 Below is the same process for the precincts to estimate the total voters and minority party votes in the minimum bounding circles, which will allow us to calculate the percentage of minority party votes in each minimum bounding circle.
 
@@ -461,6 +465,7 @@ d_mbc_estV <- precincts |>
             mbcmpV = sum(awMinor))
 ```
 
+<span style="color: #6f7f6c; font-weight: bold;">Table 6: Voting Variables in Minimum Bounding Circle</span>
 
 ```{r print mbc voting table, warning=FALSE, message=FALSE, echo=FALSE}
 d_mbc_estV |>
@@ -477,13 +482,12 @@ d_mbc_estV |>
 ```
 
 
-<span style="color: #6f7f6c; font-weight: bold;">Table 6: Voting Variables in Minimum Bounding Circle</span>
-
 ## 4.4 Compactness and Composition
 
 With everything calculated, we can now compare the demographic and voting composition of the actual districts to their convex hulls and minimum bounding circles and assess the compactness of the district shapes.
 
 ### 4.4.1 Traditional Compactness Approach
+
 The first approach is the **traditional compactness approach**. This approach asks whether a district has an irregular or non-compact shape based only on its geometry. It does not consider who lives in the district or how people vote. One common compactness score is the **Polsby--Popper ratio**, which compares the area of a district to the square of its perimeter.
 
 $$
@@ -497,6 +501,7 @@ Another compactness measure compares the area of the district to the area of its
 $$
 \text{Convex Hull Compactness} = \frac{A_{\text{district}}}{A_{\text{convex hull}}}
 $$
+
 In this equation, $A_{\text{district}}$ is the area of the district and $A_{\text{convex hull}}$ is the area of the district's convex hull. A value closer to 1 means the district closely fills its convex hull, while a lower value means the district has more indentations, gaps, or irregular extensions.
 
 A third compactness measure is the Reock score, which compares the area of the district to the area of its minimum bounding circle. The minimum bounding circle is the smallest circle that fully contains the district.
@@ -504,19 +509,23 @@ A third compactness measure is the Reock score, which compares the area of the d
 $$
 \text{Reock Score} = \frac{A_{\text{district}}}{A_{\text{minimum bounding circle}}}
 $$
+
 In this equation, $A_{\text{district}}$ is the area of the actual district and $A_{\text{minimum bounding circle}}$ is the area of the smallest circle enclosing the district. A value closer to 1 means the district fills the circle efficiently, while a lower value suggests that the district is stretched out or spatially inefficient.
 
 ### 4.4.2 Representation of Composition Approach
+
 The second approach is the **representation or composition approach**. This approach asks what proportion of a racial, ethnic, or political group is represented within each district. For racial gerrymandering, the relevant composition might be the percentage of Black or African American voting-age population. For partisan gerrymandering, the relevant composition might be the percentage of Democratic votes.
 
 $$
 C_{\text{race}} = \frac{\text{Black or African American Voting Age Population}}{\text{Total Voting Age Population}} \times 100
 $$
+
 This measures the racial composition of a district as a percentage. It tells us what share of the voting-age population belongs to the racial group of interest.
 
 $$
 C_{\text{party}} = \frac{\text{Votes for Democrat}}{\text{Votes for Democrat} + \text{Votes for Republican}} \times 100
 $$
+
 This measures the partisan composition of a district as a percentage. It tells us what share of the two-party vote went to the Democratic candidate.
 
 
@@ -548,6 +557,7 @@ districts_results <- districts_join |>
   )
 ```
 
+<span style="color: #6f7f6c; font-weight: bold;">Table 7: Compactness and Composition Comparison</span>
 
 ```{r print comparison table, warning=FALSE, message=FALSE, echo=FALSE}
 districts_results |> st_drop_geometry() |> 
@@ -566,9 +576,8 @@ districts_results |> st_drop_geometry() |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
 ```
 
-<span style="color: #6f7f6c; font-weight: bold;">Table 7: Compactness and Composition Comparison</span>
-
 ### 4.4.3 Holler's Parsimonious Composite Approach
+
 A third approach is the **parsimonious composite approach**. It asks whether the district's shape changes representation. The analysis compares the composition of the actual district to the composition of a compact geometric version of the same district, 
 
 $$
