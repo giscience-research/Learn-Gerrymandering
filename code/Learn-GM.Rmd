@@ -88,13 +88,13 @@ theme3 <- theme_bw() +
 
 # 1. Introduction
 
-This is a study of gerrymandering in Louisiana. We will test three methods of shape-based compactness scores, assess representativeness of districts based on prior presidential elections record and race.We will then extend prior studies by calculating representativeness of the convex hull and minimum bounding circle of district polygons. 
+This is a study of gerrymandering in Louisiana. We will test for the possible presence of gerrymandering based using three different approaches - a traditional apporach based on methods of shape-based compactness scores, another approach based on population composition or representation, and a final composite approach. Our focus will be on the representativeness of congressional districts using the voting results of prior presidential elections and the geographic distribution populations of different race. This work extends prior studies by extending metrics based on the convex hulls and minimum bounding circles of district polygons to include composition. 
 
 **Keywords: gerrymandering, compactness, convex hull, minimum bounding circle, area weighted reaggregation**
 
 # 2. Data and Variables
 
-The data for this analysis includes the Louisiana Congressional Districts, Louisiana Precincts, 2020 Louisiana Block Groups, and the 2020 Census Data. As background information, Louisiana has 6 congressional districts, precincts that are the smallest unit of election administration, and block groups that are the smallest unit of census data reporting.
+The data used in this analysis includes the (1) Louisiana Congressional Districts, (2) Louisiana Voting Precincts, (3) 2020 Louisiana Block Groups, and (4) 2020 Census Data. As background information, Louisiana has 6 congressional districts. Precincts are the smallest geographic unit of election administration, and block groups are the smallest unit of census data reporting.
 
 ```{r load data, warning = FALSE, message=FALSE, results='hide'}
 
@@ -112,7 +112,7 @@ census2020pl_vars <- read.csv(census_metadata_file)
 
 ```
 
-A quick visualization of the three spatial datasets shows that the districts are large and irregularly shaped, the precincts are smaller and more numerous, and the block groups are the smallest and most numerous.
+A quick visualization of the three geographic datasets shows that the districts are large and irregularly shaped, the precincts are smaller and more numerous, and the block groups are the smallest and most numerous.
 
 ```{r plot data, fig.height=5, fig.width=12, dpi=300, echo=FALSE, warning=FALSE, message=FALSE}
 # district
@@ -157,7 +157,7 @@ st_geometry(precincts) <- "geom"
 
 ## 3.2 Compute Variables of Interest
 
-As the first step in our analysis, we want to compute the percentage of the population 18 years or older that is a minority. We will focus on the Black or African American population here, but this process can be repeated for other racial categories. We would do this by reading in the metadata for the 2020 Census data and identifying the variables that correspond to the population 18 years or older that is Black or African American.
+As the first step in our analysis, we want to compute the percentage of the population 18 years or older identified in the census as a minority. We will focus on the Black or African American population here, but this process can be repeated for other racial categories. We do this by reading in the metadata for the 2020 Census data and identifying the variables that correspond to the population 18 years or older that is Black or African American.
 
 ```{r find variables, warning=FALSE, message=FALSE}
 minority_cat <- "Black"
@@ -177,7 +177,7 @@ minority_vars |>
 
 <span style="color: #6f7f6c; font-weight: bold;">Table 1: Extract Census Variables</span>
 
-Next, we will select the relevant variables from the block groups dataset and rename them for clarity. We will also calculate the area of each block group for later use in area-weighted reaggregation.
+Next, we will select the relevant variables from the __block groups__ dataset and rename them for clarity. We will also calculate the area of each block group for later use in area-weighted reaggregation.
 
 For reference: 
 
@@ -198,7 +198,7 @@ blockgroups_calc <- blockgroups |>
   select(GEOID, sarea, minority, Total, pctMinority, CheckPct)
 ```
 
-Similarly, for the precincts, we will calculate the total votes and the minority party votes based on the variables `G24PRERTRU` (total votes for the Republican candidate) and `G24PREDHAR` (total votes for the Democratic candidate). We will also calculate the area of each precinct for later use in area-weighted reaggregation.
+Similarly, for the __precincts__, we will calculate the total votes and the minority party votes based on the variables `G24PRERTRU` (total votes for the Republican candidate) and `G24PREDHAR` (total votes for the Democratic candidate). We will also calculate the area of each precinct for later use in area-weighted reaggregation.
 
 ```{r calculate variables for precincts, warning=FALSE, message=FALSE}
 precincts <- precincts |> 
@@ -240,7 +240,7 @@ grid.arrange(bg_M, v_M, nrow = 1)
 
 ## 4.1 Area Weighted Reaggregation
 
-We will estimate the minority population percentage and minority party vote percentages in each district by performing an area-weighted reaggregation (AWR) of the block group data and precints data. This involves intersecting the block groups with the districts, calculating the area of the intersection, and then weighting the population counts by the proportion of the block group that falls within each district. We will do this for the total population and the minority population to calculate the percentage of minority population in each district.
+We will estimate the minority population percentage and minority party vote percentages in each __district__ by performing an area-weighted reaggregation (AWR) of the block group data and precincts data. This involves intersecting the block groups with the districts, calculating the area of the intersection, and then weighting the population counts by the proportion of the block group that falls within each district. We will do this for the total population and the minority population to calculate the percentage of minority population in each district.
 
 For more details on the AWR method, see Chapter 4 of this **[Simple Feature Workbook](https://opengisci.github.io/Learn-Simple-Features/area-weighted-re-aggregation.html)**
 
@@ -483,6 +483,7 @@ d_mbc_estV |>
 
 With everything calculated, we can now compare the demographic and voting composition of the actual districts to their convex hulls and minimum bounding circles and assess the compactness of the district shapes.
 
+### 4.4.1 Traditional Compactness Approach
 The first approach is the **traditional compactness approach**. This approach asks whether a district has an irregular or non-compact shape based only on its geometry. It does not consider who lives in the district or how people vote. One common compactness score is the **Polsby--Popper ratio**, which compares the area of a district to the square of its perimeter.
 
 $$
@@ -496,7 +497,7 @@ Another compactness measure compares the area of the district to the area of its
 $$
 \text{Convex Hull Compactness} = \frac{A_{\text{district}}}{A_{\text{convex hull}}}
 $$
-In this equation, $A_{\text{district}}$ is the area of the actual district and $A_{\text{convex hull}}$ is the area of the district's convex hull. A value closer to 1 means the district closely fills its convex hull, while a lower value means the district has more indentations, gaps, or irregular extensions.
+In this equation, $A_{\text{district}}$ is the area of the district and $A_{\text{convex hull}}$ is the area of the district's convex hull. A value closer to 1 means the district closely fills its convex hull, while a lower value means the district has more indentations, gaps, or irregular extensions.
 
 A third compactness measure is the Reock score, which compares the area of the district to the area of its minimum bounding circle. The minimum bounding circle is the smallest circle that fully contains the district.
 
@@ -505,6 +506,7 @@ $$
 $$
 In this equation, $A_{\text{district}}$ is the area of the actual district and $A_{\text{minimum bounding circle}}$ is the area of the smallest circle enclosing the district. A value closer to 1 means the district fills the circle efficiently, while a lower value suggests that the district is stretched out or spatially inefficient.
 
+### 4.4.2 Representation of Composition Approach
 The second approach is the **representation or composition approach**. This approach asks what proportion of a racial, ethnic, or political group is represented within each district. For racial gerrymandering, the relevant composition might be the percentage of Black or African American voting-age population. For partisan gerrymandering, the relevant composition might be the percentage of Democratic votes.
 
 $$
@@ -566,7 +568,8 @@ districts_results |> st_drop_geometry() |>
 
 <span style="color: #6f7f6c; font-weight: bold;">Table 7: Compactness and Composition Comparison</span>
 
-A third approach is the **parsimonious combined approach**. It asks whether the district's shape changes representation. The analysis compares the composition of the actual district to the composition of a compact geometric version of the same district, 
+### 4.4.3 Holler's Parsimonious Composite Approach
+A third approach is the **parsimonious composite approach**. It asks whether the district's shape changes representation. The analysis compares the composition of the actual district to the composition of a compact geometric version of the same district, 
 
 $$
 C_{\text{diff, convex hull}} = C_{\text{district}} - C_{\text{convex hull}}
@@ -582,7 +585,7 @@ $$
 C_{\text{diff}} > 0
 $$
 
-If $C_{\text{diff}}$ is strongly negative, the actual district contains a lower percentage of the group than the compact comparison shape. This uggest cracking, dilution, or the exclusion of nearby group members from the district.
+If $C_{\text{diff}}$ is strongly negative, the actual district contains a lower percentage of the group than the compact comparison shape. This suggests cracking, dilution, or the exclusion of nearby group members from the district.
 
 $$
 C_{\text{diff}} < 0
