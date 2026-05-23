@@ -119,7 +119,7 @@ A quick visualization of the three geographic datasets shows that the districts 
 dst <- ggplot() +
   geom_sf(data = districts, fill = "#C1E3CD", col = "#006d2c", alpha = 0.5) +
   theme1 +
-  labs(title = "2021 Louisiana Congressional Districts")
+  labs(title = "2024 Louisiana Congressional Districts")
 # precincts
 prct <- ggplot() +
   geom_sf(data = precincts, fill =  "#C1DDF4", col = "#6EA6C3", alpha = 0.5) +
@@ -157,7 +157,7 @@ st_geometry(precincts) <- "geom"
 
 ## 3.2 Compute Variables of Interest
 
-As the first step in our analysis, we want to compute the percentage of the population 18 years or older identified in the census as a minority. We will focus on the Black or African American population here, but this process can be repeated for other racial categories. We do this by reading in the metadata for the 2020 Census data and identifying the variables that correspond to the population 18 years or older that is Black or African American.
+As the first step in our analysis, we want to compute the percentage of the population 18 years or older identified in the census as a minority. We will focus on the Black or African American population here, but this process can be repeated for other racial and ethnic minority categories. We do this by reading in the metadata for the 2020 Census data and identifying the variables that correspond to the population 18 years or older that is Black or African American alone or in combination with any other race(s).
 
 ```{r find variables, warning=FALSE, message=FALSE}
 minority_cat <- "Black"
@@ -189,6 +189,8 @@ For reference:
 - `pctMinority` is calculated as `Black / Total * 100`  
 - `CheckPct` is calculated as the percentage of the population 18 years or older that is either white of one race only (`P3_003N`) *or* Black or African American as calculated above. 
 
+The `CheckPct` results should never exceed `100%` and should be near `100%` except where significant populations of other minority races are present. If a large number of areas are below `50%`, then the researcher should consider investigating other minority groups as well.
+
 ```{r calculate variables, warning=FALSE, message=FALSE}
 blockgroups_calc <- blockgroups |> 
   rowwise() |> 
@@ -201,7 +203,7 @@ blockgroups_calc <- blockgroups |>
   select(GEOID, sarea, minority, Total, pctMinority, CheckPct)
 ```
 
-Similarly, for the **precincts**, we will calculate the total votes and the minority party votes based on the variables `G24PRERTRU` (total votes for the Republican candidate) and `G24PREDHAR` (total votes for the Democratic candidate). We will also calculate the area of each precinct for later use in area-weighted reaggregation.
+Similarly, for the **precincts**, we will calculate the total votes `totV` for major party candidates based on the variables `G24PRERTRU` (total votes for the Republican candidate) and `G24PREDHAR` (total votes for the Democratic candidate). We will calculate the minority party votes `mpV` based on the variable `G24PREDHAR` (total votes for the Democratic candidate). We will also calculate the area of each precinct for later use in area-weighted reaggregation.
 
 ```{r calculate variables for precincts, warning=FALSE, message=FALSE}
 precincts <- precincts |> 
@@ -397,10 +399,13 @@ d_ch_estV |>
 ## 4.3 Minimum Bounding Circle
 
 Minimum bounding circles (MBCs) are the smallest circles that can enclose a given geometry. They are another way to approximate the shape of a district and to calculate compactness scores.
+Can you guess why we transformed the districts to UTM Zone 15 North prior to calculating the minimum bounding circles?
 
 ```{r make mbc, warning=FALSE, message=FALSE}
 d_mbc <- districts |> 
+  st_transform(26915) |> 
   lwgeom::st_minimum_bounding_circle() |> 
+  st_transform(4269) |> 
   mutate(mbcArea = st_area(geom))
 ```
 
@@ -677,8 +682,10 @@ combined <- bind_rows(
   )
 
 ggplot(combined, aes(y = type)) +
-  geom_segment(aes(x = ch, xend = mbc, yend = type),
-               color = "darkgrey", linewidth = 1.5) +
+  xlim(0, 100) +
+  geom_vline(xintercept = 50, color = "black", linewidth = 0.8) +
+  #geom_segment(aes(x = ch, xend = mbc, yend = type),
+  #             color = "darkgrey", linewidth = 1.5) +
   geom_point(aes(x = ch), color = "#99CFAB", size = 4) +
   geom_point(aes(x = mbc), color = "#DC6D85", size = 4) +
   geom_point(aes(x = actual),color ="#6EA6C3", size = 4) +
@@ -712,8 +719,10 @@ Please consider:
 ```{r correlation matrix, warning=FALSE, message=FALSE, echo=FALSE, fig.height=6, fig.width=12, dpi=300}
 districts_results_cor <- districts_results |>
   st_drop_geometry() |>
+  mutate(chAbsDiff = 100 - chAbsDiff,
+         mbcAbsDiff = 100 - mbcAbsDiff) |> 
   select(
-    pctMinoritybg,
+    #pctMinoritybg,
     chAbsDiff,
     mbcAbsDiff,
     compact_shp,
@@ -735,7 +744,9 @@ popcor <- ggcorrplot(
 
 districts_results_cor2 <- districts_results |> 
   st_drop_geometry() |> 
-  select(pctMP,
+  mutate(chAbsDiffV = 100 - chAbsDiffV,
+         mbcAbsDiffV = 100 - mbcAbsDiffV) |> 
+  select(#pctMP,
          chAbsDiffV,
          mbcAbsDiffV,
          compact_shp,
