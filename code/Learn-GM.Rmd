@@ -625,40 +625,7 @@ districts_results |> st_drop_geometry() |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
 ```
 
-Holler's metric is essentially a simple, but powerful, comparison of these differences,
-
-$$
-C_{\text{diff, convex hull}} = C_{\text{district}} - C_{\text{convex hull}}
-$$
-
-$$
-C_{\text{diff, minimum bounding circle}} = C_{\text{district}} - C_{\text{minimum bounding circle}}
-$$
-
-If $C_{\text{diff}}$ is strongly positive, the actual district contains a higher percentage of the group than the compact comparison shape. In the context of minority representation, this may suggest packing, especially if the district is already a minority-majority district, meaning that the group is over-represented in the actual district compared to the compact reference shape. 
-
-$$
-C_{\text{diff}} > 0
-$$
-
-If $C_{\text{diff}}$ is strongly negative, the actual district contains a lower percentage of the group than the compact comparison shape. This suggests cracking, dilution, or the exclusion of nearby group members from the district.
-
-$$
-C_{\text{diff}} < 0
-$$
-
-
-If $C_{\text{diff}}$ is close to zero, then the district's irregular shape may not meaningfully change the group's composition. In this case, the district may look non-compact, but its shape does not appear to substantially distort racial or partisan representation.
-
-$$
-C_{\text{diff}} \approx 0
-$$
-
-# 6. Comparison
-
-Below are some helpful visualizations to help make sense of the different approaches used to measure compactness and representation.
-
-The second figure compares the demographic and voting composition of the actual districts to their convex hulls and minimum bounding circles. The questions for consideration here are:
+We can also visualize these racial differences along with the differences in party voting for each district and its bounding geometries. Figure 6. makes this comparison of the demographic and voting composition of the actual districts to their convex hulls and minimum bounding circles. The questions for consideration here are:
 
 - Which districts show the largest gap between actual composition and compact-shape composition?
  
@@ -708,6 +675,37 @@ ggplot(combined, aes(y = type)) +
 ```
 
 <span style="color: #6f7f6c; font-weight: bold;">Figure 6: Comparing Demographic and Voting Estimates</span>
+
+Holler's metric is essentially a simple, but powerful, comparison of these differences,
+
+$$
+C_{\text{diff, convex hull}} = C_{\text{district}} - C_{\text{convex hull}}
+$$
+
+$$
+C_{\text{diff, minimum bounding circle}} = C_{\text{district}} - C_{\text{minimum bounding circle}}
+$$
+
+If $C_{\text{diff}}$ is strongly positive, the actual district contains a higher percentage of the group than the compact comparison shape. In the context of minority representation, this may suggest packing, especially if the district is already a minority-majority district, meaning that the group is over-represented in the actual district compared to the compact reference shape. 
+
+$$
+C_{\text{diff}} > 0
+$$
+
+If $C_{\text{diff}}$ is strongly negative, the actual district contains a lower percentage of the group than the compact comparison shape. This suggests cracking, dilution, or the exclusion of nearby group members from the district.
+
+$$
+C_{\text{diff}} < 0
+$$
+
+
+If $C_{\text{diff}}$ is close to zero, then the district's irregular shape may not meaningfully change the group's composition. In this case, the district may look non-compact, but its shape does not appear to substantially distort racial or partisan representation.
+
+$$
+C_{\text{diff}} \approx 0
+$$
+
+# 6. Comparison
 
 The last figure examines the statistical relationship between compactness, minority composition, and representational differences. The strongest pattern is the large negative correlations between: minority composition and compactness measures. This means that higher minority population percentages are associated with lower compactness scores and higher minority party vote shares are also associated with lower compactness. 
 
