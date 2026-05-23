@@ -88,7 +88,7 @@ theme3 <- theme_bw() +
 
 # 1. Introduction
 
-This is a study of gerrymandering in Louisiana. We will test for the possible presence of gerrymandering based using three different approaches - a traditional apporach based on methods of shape-based compactness scores, another approach based on population composition or representation, and a final composite approach. Our focus will be on the representativeness of congressional districts using the voting results of prior presidential elections and the geographic distribution populations of different race. This work extends prior studies by extending metrics based on the convex hulls and minimum bounding circles of district polygons to include composition. 
+This is a study of gerrymandering in Louisiana. Our objective is two-fold. First. we will introduce metrics that test for the presence of a gerrymander. Second, we will test for the possible presence of gerrymandering in Louisiana using three different approaches - a traditional approach based on methods of shape-based compactness scores, another approach based on population composition or representation, and a final composite approach. Our focus will be on the representativeness of congressional districts using the voting results of prior presidential elections and the geographic distribution populations of different race. This work extends prior studies by extending metrics based on the convex hulls and minimum bounding circles of district polygons to include composition. 
 
 **Keywords: gerrymandering, compactness, convex hull, minimum bounding circle, area weighted reaggregation**
 
@@ -203,7 +203,7 @@ blockgroups_calc <- blockgroups |>
   select(GEOID, sarea, minority, Total, pctMinority, CheckPct)
 ```
 
-Similarly, for the **precincts**, we will calculate the total votes `totV` for major party candidates based on the variables `G24PRERTRU` (total votes for the Republican candidate) and `G24PREDHAR` (total votes for the Democratic candidate). We will calculate the minority party votes `mpV` based on the variable `G24PREDHAR` (total votes for the Democratic candidate). We will also calculate the area of each precinct for later use in area-weighted reaggregation.
+Similarly, for the **precincts**, we will calculate the total votes `totV` for major party candidates based on the variables `G24PRERTRU` (total votes for the Republican candidate) and `G24PREDHAR` (total votes for the Democratic candidate). We will calculate the minority party votes `mpV` based on the variable `G24PREDHAR` (total votes for the Democratic candidate). Please not that the majority and minority party designations are state specific. For example, if this analysis were conducted in California, it would be sensible to reverse these designations because democratic voters outnumber republican votes in that state. We will also calculate the area of each precinct for later use in area-weighted reaggregation.
 
 ```{r calculate variables for precincts, warning=FALSE, message=FALSE}
 precincts <- precincts |> 
@@ -533,6 +533,9 @@ $$
 
 This measures the partisan composition of a district as a percentage. It tells us what share of the two-party vote went to the Democratic candidate.
 
+### 4.4.3 Computation and Comparison of Gerrymandering Metrics
+
+Both the compactness-based and the composition-based metrics can be calculated use the geometries that we prepared earlier.
 
 ```{r join results, warning=FALSE, message=FALSE}
 districts_results <- districts_join |> 
@@ -551,7 +554,7 @@ districts_results <- districts_join |>
   left_join(d_mbc_estV, by = "DISTRICT") |> 
   mutate(mbcPctV = round(mbcmpV / mbctotV * 100, 1),
          mbcDiffV = pctMP - mbcPctV,
-         mbcAbsDiffV = abs(mbcDiffV)) |> 
+         mbcAbsDiffV = abs(mbcDiffV)) |>
   # calculate compactness scores
   mutate(
     darea = st_area(geom),
@@ -562,61 +565,7 @@ districts_results <- districts_join |>
   )
 ```
 
-<span style="color: #6f7f6c; font-weight: bold;">Table 7: Compactness and Composition Comparison</span>
-
-```{r print comparison table, warning=FALSE, message=FALSE, echo=FALSE}
-districts_results |> st_drop_geometry() |> 
-  dplyr::select(DISTRICT, pctMinoritybg, chPct, chDiff, chAbsDiff, mbcPct, mbcDiff, mbcAbsDiff) |>
-  rename(
-    "District" = DISTRICT,
-    "Pct Minority in District" = pctMinoritybg,
-    "Pct Minority in Convex Hull" = chPct,
-    "Difference (District - Convex Hull)" = chDiff,
-    "Absolute Difference (District - Convex Hull)" = chAbsDiff,
-    "Pct Minority in MBC" = mbcPct,
-    "Difference (District - MBC)" = mbcDiff,
-    "Absolute Difference (District - MBC)" = mbcAbsDiff
-  ) |>
-  kable() |>
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
-```
-
-### 4.4.3 Holler's Parsimonious Composite Approach
-
-A third approach is the **parsimonious composite approach**. It asks whether the district's shape changes representation. The analysis compares the composition of the actual district to the composition of a compact geometric version of the same district, 
-
-$$
-C_{\text{diff, convex hull}} = C_{\text{district}} - C_{\text{convex hull}}
-$$
-
-$$
-C_{\text{diff, minimum bounding circle}} = C_{\text{district}} - C_{\text{minimum bounding circle}}
-$$
-
-If $C_{\text{diff}}$ is strongly positive, the actual district contains a higher percentage of the group than the compact comparison shape. In the context of minority representation, this may suggest packing, especially if the district is already a minority-majority district, meaning that the group is over-represented in the actual district compared to the compact reference shape. 
-
-$$
-C_{\text{diff}} > 0
-$$
-
-If $C_{\text{diff}}$ is strongly negative, the actual district contains a lower percentage of the group than the compact comparison shape. This suggests cracking, dilution, or the exclusion of nearby group members from the district.
-
-$$
-C_{\text{diff}} < 0
-$$
-
-
-If $C_{\text{diff}}$ is close to zero, then the district's irregular shape may not meaningfully change the group's composition. In this case, the district may look non-compact, but its shape does not appear to substantially distort racial or partisan representation.
-
-$$
-C_{\text{diff}} \approx 0
-$$
-
-# 5. Comparison
-
-Below are some helpful visualizations to help make sense of the different approaches used to measure compactness and representation.
-
-The first figure compares three compactness metrics across districts. The first thing to notice is that the measures disagree substantially for some districts. Some further questions for consideration:
+The figure below compares the three compactness metrics across the 6 districts of Louisiana. The first thing to notice is that the measures disagree substantially for some districts. Some further questions to consider:
 
 - Which districts are consistently non-compact across all three measures?
 
@@ -647,10 +596,67 @@ districts_results |>
   theme(
     legend.position = "bottom",
     axis.title = element_text(size = 9))
-
 ```
 
 <span style="color: #6f7f6c; font-weight: bold;">Figure 5: Compactness Score Comparison</span>
+
+# 5. An Alternative Analytical Approach
+
+## 5.1 Holler's Parsimonious Composite Approach
+
+Holler proposes a third **parsimonious composite approach** to the gerrymandering problem. Dr. Holler asks whether the district's shape changes voter representation. The analysis compares the composition of the actual district to the composition of a compact geometric version of a similar district. Before we examine this's mertic, let's simply compare the distribution of black voters in the different geometries. 
+
+<span style="color: #6f7f6c; font-weight: bold;">Table 7: Compactness and Composition Comparison</span>
+
+```{r print comparison table, warning=FALSE, message=FALSE, echo=FALSE}
+districts_results |> st_drop_geometry() |> 
+  dplyr::select(DISTRICT, pctMinoritybg, chPct, chDiff, chAbsDiff, mbcPct, mbcDiff, mbcAbsDiff) |>
+  rename(
+    "District" = DISTRICT,
+    "Pct Minority in District" = pctMinoritybg,
+    "Pct Minority in Convex Hull" = chPct,
+    "Difference (District - Convex Hull)" = chDiff,
+    "Absolute Difference (District - Convex Hull)" = chAbsDiff,
+    "Pct Minority in MBC" = mbcPct,
+    "Difference (District - MBC)" = mbcDiff,
+    "Absolute Difference (District - MBC)" = mbcAbsDiff
+  ) |>
+  kable() |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
+```
+
+Holler's metric is essentially a simple, but powerful, comparison of these differences,
+
+$$
+C_{\text{diff, convex hull}} = C_{\text{district}} - C_{\text{convex hull}}
+$$
+
+$$
+C_{\text{diff, minimum bounding circle}} = C_{\text{district}} - C_{\text{minimum bounding circle}}
+$$
+
+If $C_{\text{diff}}$ is strongly positive, the actual district contains a higher percentage of the group than the compact comparison shape. In the context of minority representation, this may suggest packing, especially if the district is already a minority-majority district, meaning that the group is over-represented in the actual district compared to the compact reference shape. 
+
+$$
+C_{\text{diff}} > 0
+$$
+
+If $C_{\text{diff}}$ is strongly negative, the actual district contains a lower percentage of the group than the compact comparison shape. This suggests cracking, dilution, or the exclusion of nearby group members from the district.
+
+$$
+C_{\text{diff}} < 0
+$$
+
+
+If $C_{\text{diff}}$ is close to zero, then the district's irregular shape may not meaningfully change the group's composition. In this case, the district may look non-compact, but its shape does not appear to substantially distort racial or partisan representation.
+
+$$
+C_{\text{diff}} \approx 0
+$$
+
+# 6. Comparison
+
+Below are some helpful visualizations to help make sense of the different approaches used to measure compactness and representation.
 
 The second figure compares the demographic and voting composition of the actual districts to their convex hulls and minimum bounding circles. The questions for consideration here are:
 
