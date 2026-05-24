@@ -22,7 +22,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 <div class="date">
-  Version 1.0 | First Created May 18, 2026 | Updated May 21, 2026
+  Version 2.0 | First Created May 18, 2026 | Updated May 23, 2026
 </div>
 
 ```{r sets up, warning = FALSE, message = FALSE, include=FALSE}
@@ -651,14 +651,11 @@ combined <- bind_rows(
 ) |>
   mutate(
     DISTRICT = factor(DISTRICT),
-    type = factor(type, levels = c("Minority Population (%)", "Minority Party Vote (%)"))
-  )
+    type = factor(type, levels = c("Minority Population (%)", "Minority Party Vote (%)")))
 
 ggplot(combined, aes(y = type)) +
   xlim(0, 100) +
-  geom_vline(xintercept = 50, color = "black", linewidth = 0.8) +
-  #geom_segment(aes(x = ch, xend = mbc, yend = type),
-  #             color = "darkgrey", linewidth = 1.5) +
+  geom_vline(xintercept = 50, color = "grey35", linewidth = 0.7, linetype = "dashed", alpha = 0.8) +
   geom_point(aes(x = ch), color = "#99CFAB", size = 4) +
   geom_point(aes(x = mbc), color = "#DC6D85", size = 4) +
   geom_point(aes(x = actual),color ="#6EA6C3", size = 4) +
@@ -669,9 +666,11 @@ ggplot(combined, aes(y = type)) +
     x = "Percentage (%)", y = NULL) +
   theme3 +
   theme(
-    strip.text       = element_text(face = "bold", size = 10),
-    panel.spacing    = unit(1, "lines")
-  )
+    strip.text  = element_text(face = "bold", size = 10),
+    strip.background = element_rect(
+      fill = "grey85",
+      color = NA),
+    panel.spacing = unit(1, "lines"))
 ```
 
 <span style="color: #6f7f6c; font-weight: bold;">Figure 6: Comparing Demographic and Voting Estimates</span>
@@ -705,72 +704,3 @@ $$
 C_{\text{diff}} \approx 0
 $$
 
-# 6. Comparison
-
-The last figure examines the statistical relationship between compactness, minority composition, and representational differences. The strongest pattern is the large negative correlations between: minority composition and compactness measures. This means that higher minority population percentages are associated with lower compactness scores and higher minority party vote shares are also associated with lower compactness. 
-
-> Note: This pattern is consistent with the idea of packing, where districts with higher minority populations are drawn in more irregular shapes to concentrate those voters into fewer districts. 
-
-Please consider: 
-
-- Which compactness measure appears most strongly related to demographic change?
-
-- Are compactness and representation strongly correlated?
-
-- Do racial and partisan composition behave similarly?
-
-
-```{r correlation matrix, warning=FALSE, message=FALSE, echo=FALSE, fig.height=6, fig.width=12, dpi=300}
-districts_results_cor <- districts_results |>
-  st_drop_geometry() |>
-  mutate(chAbsDiff = 100 - chAbsDiff,
-         mbcAbsDiff = 100 - mbcAbsDiff) |> 
-  select(
-    #pctMinoritybg,
-    chAbsDiff,
-    mbcAbsDiff,
-    compact_shp,
-    compact_hull,
-    compact_circ)
-
-popcor <- ggcorrplot(
-  round(cor(districts_results_cor), 1),
-  colors = c("#6EA6C3", "#F7F0F5", "#DC6D85"),  
-  type = "lower",
-  insig = "blank",
-  lab = TRUE,       
-  lab_size = 3,     
-  tl.cex = 8) +
-  labs(
-    title = "District Shape and Minority Population Composition") +
-  theme2
-
-
-districts_results_cor2 <- districts_results |> 
-  st_drop_geometry() |> 
-  mutate(chAbsDiffV = 100 - chAbsDiffV,
-         mbcAbsDiffV = 100 - mbcAbsDiffV) |> 
-  select(#pctMP,
-         chAbsDiffV,
-         mbcAbsDiffV,
-         compact_shp,
-         compact_hull,
-         compact_circ)
-
-votecor <- ggcorrplot(
-  round(cor(districts_results_cor2), 1),
-  colors = c("#6EA6C3", "#F7F0F5", "#DC6D85"),  
-  type = "lower",
-  insig = "blank",
-  lab = TRUE,       
-  lab_size = 3,      
-  tl.cex = 8) +
-  labs(
-    title = "District Shape and Minority Voting Composition") +
-  theme2
-
-grid.arrange(popcor, votecor, nrow = 1)
-```
-
-
-<span style="color: #6f7f6c; font-weight: bold;">Figure 7: Correlation Analysis</span>
