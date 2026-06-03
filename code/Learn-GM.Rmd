@@ -97,18 +97,23 @@ This is a study of gerrymandering in Louisiana. Our objective is two-fold. First
 The data used in this analysis includes the (1) Louisiana Congressional Districts, (2) Louisiana Voting Precincts, (3) 2020 Louisiana Block Groups, and (4) 2020 Census Data. As background information, Louisiana has 6 congressional districts. Precincts are the smallest geographic unit of election administration, and block groups are the smallest unit of census data reporting.
 
 ```{r load data, warning = FALSE, message=FALSE, results='hide'}
-
 # file paths
-districts_file <- here("data", "raw", "Act_2_1st_ES_(2024)_-_Congress.shp")
+districts_file <- list(
+  "HB1" = here("data", "raw", "HB1", "HB1_Congress_221ES.shp"),
+  "SB4" = here("data", "raw", "SB4", "Congress_-_SB4_Original_(Price).shp"),
+  "SB8" = here("data", "raw", "SB8", "Act_2_1st_ES_(2024)_-_Congress.shp"),
+  "SB121" = here("data", "raw", "SB121", "SB_121_Enrolled.shp")
+)
 blockgroup_file <- here("data", "raw", "LA_block_groups.gpkg")
 precincts_file <- here("data", "raw", "LA_precincts.gpkg")
 census_metadata_file <- here::here("data", "metadata", "census2020pl_vars.csv")
 
 # read in the data
-districts <- st_read(districts_file)
+districts <- st_read(districts_file$SB4)
 precincts <- st_read(precincts_file, layer = "LA_precincts_clipped")
 blockgroups <- st_read(blockgroup_file)
 census2020pl_vars <- read.csv(census_metadata_file)
+
 
 ```
 
@@ -144,7 +149,8 @@ grid.arrange(dst, prct, bg, nrow = 1)
 The districts, precincts, and block groups are in different coordinate reference systems (CRS). To perform spatial operations, we need to transform them to a common CRS. We will use the NAD 1983 geographic coordinate system (EPSG:4269) for all datasets.
 
 ```{r reproject data, warning=FALSE, message=FALSE}
-districts <- districts |> st_transform(4269) 
+districts <- districts |> st_transform(4269) |> 
+  rename_with(~ "DISTRICT", any_of("DISTRICT_I"))
 st_geometry(districts) <- "geom"
 
 blockgroups <- blockgroups |> st_transform(4269)
