@@ -109,7 +109,7 @@ precincts_file <- here("data", "raw", "LA_precincts.gpkg")
 census_metadata_file <- here::here("data", "metadata", "census2020pl_vars.csv")
 
 # read in the data
-districts <- st_read(districts_file$SB4)
+districts <- st_read(districts_file$SB8)
 precincts <- st_read(precincts_file, layer = "LA_precincts_clipped")
 blockgroups <- st_read(blockgroup_file)
 census2020pl_vars <- read.csv(census_metadata_file)
@@ -150,7 +150,7 @@ The districts, precincts, and block groups are in different coordinate reference
 
 ```{r reproject data, warning=FALSE, message=FALSE}
 districts <- districts |> st_transform(4269) |> 
-  rename_with(~ "DISTRICT", any_of("DISTRICT_I"))
+  rename(DISTRICT = any_of("DISTRICT_I"))
 st_geometry(districts) <- "geom"
 
 blockgroups <- blockgroups |> st_transform(4269)
